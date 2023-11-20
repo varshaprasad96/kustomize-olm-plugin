@@ -1,0 +1,24 @@
+apiVersion: config.kubernetes.io/v1alpha1
+kind: Catalog
+metadata: 
+  name: "official-kustomize-functions"
+spec: 
+  krmFunctions: 
+  - group: transformers.example.co
+    names:
+      kind: ValueAnnotator
+    description: "A Kustomize function that can handle Helm charts"
+    versions:
+    - name: v1
+      runtime: 
+        container: 
+          image:  example.docker.com/my-functions/valueannotator:1.0.0
+  - group: example.co
+    names:
+      kind: McGuffin
+    description: "A KRM function that everyone is searching for"
+    versions:
+    - name: v1
+      runtime: 
+        container: 
+          image:  docker.example.io/krm/mcguffin-function:v1.0.0
