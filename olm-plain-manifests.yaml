@@ -1,0 +1,347 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  creationTimestamp: null
+  name: prometheus-system
+spec: {}
+status: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  creationTimestamp: null
+  name: prometheus-k8s
+  namespace: prometheus-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  creationTimestamp: null
+  name: prometheus-operator
+  namespace: prometheus-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: prometheusoperator.0.47.0-prometheus-k8s-78cc8486cd
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - endpoints
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extensions
+  resources:
+  - ingresses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: prometheusoperator.0.47.0-prometheus-operator-8457d997f
+rules:
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - alertmanagers
+  - alertmanagers/finalizers
+  - alertmanagerconfigs
+  - prometheuses
+  - prometheuses/finalizers
+  - thanosrulers
+  - thanosrulers/finalizers
+  - servicemonitors
+  - podmonitors
+  - probes
+  - prometheusrules
+  verbs:
+  - '*'
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - secrets
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - list
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - services/finalizers
+  - endpoints
+  verbs:
+  - get
+  - create
+  - update
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  creationTimestamp: null
+  name: prometheusoperator.0.47.0-prometheus-k8s-78cc8486cd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheusoperator.0.47.0-prometheus-k8s-78cc8486cd
+subjects:
+- kind: ServiceAccount
+  name: prometheus-k8s
+  namespace: prometheus-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  creationTimestamp: null
+  name: prometheusoperator.0.47.0-prometheus-operator-8457d997f
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheusoperator.0.47.0-prometheus-operator-8457d997f
+subjects:
+- kind: ServiceAccount
+  name: prometheus-operator
+  namespace: prometheus-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "monitoring.coreos.com/v1",
+          "kind": "Prometheus",
+          "metadata": {
+            "name": "example"
+          },
+          "spec": {
+            "replicas": 2,
+            "serviceAccountName": "prometheus-k8s",
+            "serviceMonitorSelector": {},
+            "ruleSelector": {},
+            "podMonitorSelector": {},
+            "probeSelector": {},
+            "alerting": {
+              "alertmanagers": [
+                {
+                  "namespace": "monitoring",
+                  "name": "alertmanager-main",
+                  "port": "web"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "apiVersion": "monitoring.coreos.com/v1",
+          "kind": "ServiceMonitor",
+          "metadata": {
+            "name": "example"
+          },
+          "spec": {
+            "selector": {
+              "matchLabels": {
+                "operated-prometheus": "true"
+              }
+            },
+            "endpoints": [
+              {
+                "port": "web",
+                "interval": "30s"
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "monitoring.coreos.com/v1",
+          "kind": "PodMonitor",
+          "metadata": {
+            "name": "example"
+          },
+          "spec": {
+            "selector": {
+              "matchLabels": {
+                "app": "prometheus"
+              }
+            },
+            "podMetricsEndpoints": [
+              {
+                "port": "web",
+                "interval": "30s"
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "monitoring.coreos.com/v1",
+          "kind": "Alertmanager",
+          "metadata": {
+            "name": "alertmanager-main"
+          },
+          "spec": {
+            "replicas": 3,
+            "alertmanagerConfigSelector": {}
+          }
+        },
+        {
+          "apiVersion": "monitoring.coreos.com/v1",
+          "kind": "PrometheusRule",
+          "metadata": {
+            "name": "prometheus-example-rules"
+          },
+          "spec": {
+            "groups": [
+              {
+                "name": "./example.rules",
+                "rules": [
+                  {
+                    "alert": "ExampleAlert",
+                    "expr": "vector(1)"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "monitoring.coreos.com/v1alpha1",
+          "kind": "AlertmanagerConfig",
+          "metadata": {
+            "name": "example"
+          },
+          "spec": {
+            "receivers": [
+              {
+                "name": "example"
+              }
+            ],
+            "route": {
+              "receiver": "example"
+            }
+          }
+        }
+      ]
+    capabilities: Deep Insights
+    categories: Monitoring
+    certified: "false"
+    containerImage: quay.io/prometheus-operator/prometheus-operator:v0.47.0
+    createdAt: "2021-04-15T23:43:00Z"
+    description: Manage the full lifecycle of configuring and managing Prometheus
+      and Alertmanager servers.
+    olm.targetNamespaces: ""
+    repository: https://github.com/prometheus-operator/prometheus-operator
+    support: Red Hat, Inc.
+  creationTimestamp: null
+  name: prometheus-operator
+  namespace: prometheus-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: prometheus-operator
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app.kubernetes.io/component: controller
+        app.kubernetes.io/name: prometheus-operator
+        app.kubernetes.io/version: 0.47.0
+        k8s-app: prometheus-operator
+    spec:
+      containers:
+      - args:
+        - --namespaces=$(TARGET_NAMESPACES)
+        - --prometheus-instance-namespaces=$(OPERATOR_NAMESPACE)
+        - --alertmanager-instance-namespaces=$(OPERATOR_NAMESPACE)
+        - --thanos-ruler-instance-namespaces=$(OPERATOR_NAMESPACE)
+        - --prometheus-config-reloader=quay.io/prometheus-operator/prometheus-config-reloader:v0.47.0
+        env:
+        - name: OPERATOR_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['olm.operatorNamespace']
+        - name: TARGET_NAMESPACES
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['olm.targetNamespaces']
+        image: quay.io/prometheus-operator/prometheus-operator:v0.47.0
+        name: prometheus-operator
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          limits:
+            cpu: 300m
+            memory: 3Gi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+      serviceAccount: prometheus-operator
+status: {}
