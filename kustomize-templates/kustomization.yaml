@@ -1,4 +1,4 @@
 resources:
-- service.yaml
+- csv.yaml
 transformers:
 - annotator.yaml
