@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/kyaml/fn/framework"
 	"sigs.k8s.io/kustomize/kyaml/fn/framework/command"
 	"sigs.k8s.io/kustomize/kyaml/kio"
@@ -24,7 +25,6 @@ import (
 )
 
 type ValueAnnotator struct {
-	Value string `yaml:"value" json:"value"`
 	BundleRoot string `yaml:"bundleRoot" json:"bundleRoot"`
 	InstallNamespace string `yaml:"installnamespace" json:"installnamespace"`
 	PackageName string `yaml:"packageName" json:"packageName"`
@@ -47,7 +47,6 @@ func main() {
 		}
 
 		var (
-			result []*yaml.RNode
 			installNamespace string
 			targetNamespaces []string
 		)
@@ -168,28 +167,34 @@ func main() {
 			ObjectMeta: metav1.ObjectMeta{Name: installNamespace},
 		}
 
-
-		// saName := saNameOrDefault(csv.GetName())
-		// sa := newServiceAccount("default", saName)
-
-		// // Convert Unstructured to RNode
-		// saNode, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&sa)
-		// if err != nil {
-		// 	return nil, fmt.Errorf("Error converting to Unstructured: %v\n", err)
-		// }
-		// yamlBytes, err := yaml.Marshal(saNode)
-		// if err != nil {
-		// 	return nil, fmt.Errorf("Error converting to RNode: %v\n", err)	
-		// }
-
-		// r, err := yaml.Parse(string(yamlBytes)) 
-		// if err != nil {
-		// 	return nil, fmt.Errorf("Error parsing to RNode: %v\n", err)	
-		// }
-
-		// result = append(result, r)
-
-		return result, nil
+		objs := []client.Object{ns}
+		for _, obj := range serviceAccounts {
+			obj := obj
+			if obj.GetName() != "default" {
+				objs = append(objs, &obj)
+			}
+		}
+		for _, obj := range roles {
+			obj := obj
+			objs = append(objs, &obj)
+		}
+		for _, obj := range roleBindings {
+			obj := obj
+			objs = append(objs, &obj)
+		}
+		for _, obj := range clusterRoles {
+			obj := obj
+			objs = append(objs, &obj)
+		}
+		for _, obj := range clusterRoleBindings {
+			obj := obj
+			objs = append(objs, &obj)
+		}
+		for _, obj := range deployments {
+			obj := obj
+			objs = append(objs, &obj)
+		}
+		return  convertObjToNode(objs)
 	}
 	p := framework.SimpleProcessor{Config: config, Filter: kio.FilterFunc(fn)}
 	cmd := command.Build(p, command.StandaloneDisabled, false)
@@ -197,6 +202,30 @@ func main() {
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
+
+func convertObjToNode(objects []client.Object) ([]*yaml.RNode, error) {
+	var result []*yaml.RNode
+	for _, obj := range objects {
+		// Convert Unstructured to RNode
+		node, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&obj)
+		if err != nil {
+			return nil, fmt.Errorf("Error converting to Unstructured: %v\n", err)
+		}
+		yamlBytes, err := yaml.Marshal(node)
+		if err != nil {
+			return nil, fmt.Errorf("Error converting to RNode: %v\n", err)	
+		}
+
+		r, err := yaml.Parse(string(yamlBytes)) 
+		if err != nil {
+			return nil, fmt.Errorf("Error parsing to RNode: %v\n", err)	
+		}
+
+		result = append(result, r)
+	}
+
+	return result, nil
 }
 
 
