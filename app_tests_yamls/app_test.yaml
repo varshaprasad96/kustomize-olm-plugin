@@ -1,0 +1,127 @@
+apiVersion: kappctrl.k14s.io/v1alpha1
+kind: App
+metadata:
+  name: simple-app
+  namespace: default
+spec:
+  serviceAccountName: default-ns-sa
+  fetch:
+  - git:
+      url: https://github.com/varshaprasad96/prometheus-rukpak
+      ref: main
+      subPath: manifests
+  template:
+  - ytt:
+      inline:
+        paths:
+          config.yml: |
+            #@ load("@ytt:yaml", "yaml")
+            #@ load("@ytt:data", "data")
+            #@ load("@ytt:assert", "assert")
+            #@ load("@ytt:overlay", "overlay")
+            #! format.star
+
+            #! getinstallns - get annotation value or default
+            #!
+            #@ def getinstallns(annotations, key, default):
+            #@   return annotations[key] if key in annotations else default
+            #@ end
+
+            #! validate target namespaces based on install modes
+            #!
+            #@ def validateTargetNamespaces():
+            #@  supportedInstallModes = data.values.spec.installModes
+            #@  for mode in supportedInstallModes:
+            #@     if mode.type == "AllNamespaces" and mode.supported:
+            #@        return
+            #@     end
+            #@  end
+            #@  assert.fail("expect all namespaces to be set")
+            #@ end
+
+            #@ def getAnnotations(depspec):
+            #@  if 'annotations' in depspec:
+            #@     return depspec.annotations + data.values.metadata.annotations
+            #@  end
+            #@ return data.values.metadata.annotations
+            #@ end
+
+            #@ def getAllPerms():
+            #@  res = {}
+            #@  if 'permissions' in data.values.spec.install.spec:
+            #@     res = data.values.spec.install.spec.permissions
+            #@  end
+            #@  if 'clusterPermissions' in data.values.spec.install.spec:
+            #@     res = data.values.spec.install.spec.clusterPermissions
+            #@  end
+            #@  return res
+            #@ end
+
+            #@ def getSAName(depspec):
+            #@  if 'serviceAccountName' in depspec:
+            #@    return depspec.serviceAccountName
+            #@  end
+            #@ return "default-test"
+            #@ end
+
+            #! get TargetNamespace based on install modes
+            #! 
+            #@ def getTargetNamespace():
+            #@  supportedInstallModes = data.values.spec.installModes
+            #@  for mode in supportedInstallModes:
+            #@     supported_modes = []
+            #@     if mode.supported:
+            #@       supported_modes.append(mode.type)
+            #@     end
+            #@  end
+            #@
+            #@  if "AllNamespaces" in supported_modes:
+            #@    return ""
+            #@  elif "OwnNamespace" in supported_modes:
+            #@    return getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
+            #@  end
+            #@
+            #@ end
+
+            #! get names hashed for cluster roles and roles
+            #!
+            #@ def gethashName(csvName, saName):
+            #@  baseName = "{}-{}".format(csvName, saName)
+            #@  hashStr =  (str(hash(baseName)))[:63-len(baseName)-1]
+            #@  return "{}-{}".format(baseName, hashStr)
+            #@ end
+
+            #! Deployments
+            #@ for dep in data.values.spec.install.spec.deployments:
+            ---
+            apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              annotations: #@ getAnnotations(dep.spec.template.metadata)
+              name: #@ dep.name
+              namespace: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
+            spec: #@ dep.spec
+            ---
+            apiVersion: v1
+            kind: Namespace
+            metadata:
+              creationTimestamp: null
+              name: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
+            spec: {}
+            ---
+            apiVersion: v1
+            kind: ServiceAccount
+            metadata:
+              creationTimestamp: null
+              name: #@ getSAName(dep.spec.template.spec)
+              namespace: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
+            #@ end
+
+
+      ignoreUnknownComments: true
+      valuesFrom:
+      - path: prometheusoperator.0.47.0.clusterserviceversion.yaml
+      fileMarks:
+      - prometheusoperator.0.47.0.clusterserviceversion.yaml:exclude=true
+  deploy:
+  - kapp: {}
