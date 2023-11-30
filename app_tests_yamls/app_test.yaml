@@ -103,13 +103,6 @@ spec:
             spec: #@ dep.spec
             ---
             apiVersion: v1
-            kind: Namespace
-            metadata:
-              creationTimestamp: null
-              name: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
-            spec: {}
-            ---
-            apiVersion: v1
             kind: ServiceAccount
             metadata:
               creationTimestamp: null
@@ -117,6 +110,150 @@ spec:
               namespace: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
             #@ end
 
+
+            #! Service account based on permissions and cluster permissions
+            #@ if 'permissions' in data.values.spec.install.spec:
+            #@ for perm in data.values.spec.install.spec.permissions:
+            ---
+            apiVersion: v1
+            kind: ServiceAccount
+            metadata:
+              name: #@ getSAName(perm)
+              namespace: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
+            #@ end
+            #@ end
+
+
+            #@ if 'clusterPermissions' in data.values.spec.install.spec:
+            #@ for perm in data.values.spec.install.spec.clusterPermissions:
+            ---
+            apiVersion: v1
+            kind: ServiceAccount
+            metadata:
+              name: #@ getSAName(perm)
+              namespace: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
+            #@ end
+            #@ end
+
+
+            #! Create cluster roles if in all namespace mode
+            #@ if getTargetNamespace() == "":
+            #@ allPerms = getAllPerms()
+            #@ for perm in allPerms:
+            #@ saName = getSAName(perm)
+            #@ clusterrolename = gethashName(data.values.metadata.name, saName)
+            ---
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: ClusterRole
+            metadata:
+              namespace: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
+              name: #@ clusterrolename
+            #@overlay/match by=overlay.subset({"rules": "..."})
+            rules:
+            #@ for rule in perm.rules:
+            - apiGroups:
+              - ""
+              resources: #@ rule.resources
+              verbs: #@ rule.verbs
+            #@ end
+            - apiGroups:
+              - ""
+              resources:
+              - namespaces
+              verbs:
+              - get
+              - list
+              - watch
+            ---
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: ClusterRoleBinding
+            metadata:
+              creationTimestamp: null
+              name: #@ clusterrolename
+            roleRef:
+              apiGroup: rbac.authorization.k8s.io
+              kind: ClusterRole
+              name: #@ clusterrolename
+            subjects:
+            - kind: ServiceAccount
+              name: #@ saName
+              namespace: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
+            #@ end
+            #@ end
+
+
+            #! Create roles and role bindings if !allnamespacemode
+            #!
+            #@ if getTargetNamespace() != "":
+            #@ if 'permissions' in data.values.spec.install.spec:
+            #@ for perm in data.values.spec.install.spec.permissions:
+            #@ saName = getSAName(perm)
+            #@ rolename = gethashName(data.values.metadata.name, saName)
+            ---
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: Role
+            metadata:
+              namespace: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
+              name: #@ rolename
+            rules: #@ perm.rules
+            ---
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: RoleBinding
+            metadata:
+              creationTimestamp: null
+              name: #@ rolename
+            roleRef:
+              apiGroup: rbac.authorization.k8s.io
+              kind: Role
+              name: #@ rolename
+            subjects:
+            - kind: ServiceAccount
+              name: #@ saName
+              namespace: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
+            #@ end
+            #@ end
+            #!
+            #!
+            #!
+            #@ if 'clusterPermissions' in data.values.spec.install.spec:
+            #@ for perm in data.values.spec.install.spec.clusterPermissions:
+            #@ saName = getSAName(perm)
+            #@ clusterrolename = gethashName(data.values.metadata.name, saName)
+            ---
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: ClusterRole
+            metadata:
+              namespace: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
+              name: #@ clusterrolename
+            #@overlay/match by=overlay.subset({"rules": "..."})
+            rules: #@ perm.rules
+            ---
+            apiVersion: rbac.authorization.k8s.io/v1
+            kind: ClusterRoleBinding
+            metadata:
+              creationTimestamp: null
+              name: #@ clusterrolename
+            roleRef:
+              apiGroup: rbac.authorization.k8s.io
+              kind: ClusterRole
+              name: #@ clusterrolename
+            subjects:
+            - kind: ServiceAccount
+              name: #@ saName
+              namespace: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
+            #@ end
+            #@ end
+            #@ end
+
+            #! namespace
+            #!
+            ---
+            apiVersion: v1
+            kind: Namespace
+            metadata:
+              creationTimestamp: null
+              name: #@ getinstallns(data.values.metadata.annotations, "operatorframework.io/suggested-namespace", dep.name + "-system")
+            spec: {}
 
       ignoreUnknownComments: true
       valuesFrom:
